@@ -3,7 +3,7 @@
    - 음원은 "쓴 것만" 저장합니다. 처음부터 1,800개를 통째로 받지 않습니다.
    - 캐시를 바꿀 때는 VERSION 숫자만 올리면 이전 캐시가 정리됩니다. */
 
-const VERSION = 'v5.0.0';
+const VERSION = 'v5.2.0';
 const SHELL = 'shell-' + VERSION;
 const MEDIA = 'media-' + VERSION;
 
@@ -78,7 +78,27 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 3) 그 외(앱 파일, 글꼴): 캐시 우선, 없으면 받아서 저장
+  // 3) 앱 본체(html·js·json): 인터넷 우선 → 새 버전을 올리면 바로 반영, 끊기면 저장본 사용
+  if (url.origin === location.origin &&
+      (req.mode === 'navigate' || /\.(html|js|json)$/i.test(url.pathname) || url.pathname.endsWith('/'))){
+    e.respondWith((async () => {
+      try {
+        const res = await fetch(req, {cache: 'no-cache'});
+        if (res && res.ok){
+          const c = await caches.open(SHELL);
+          c.put(req, res.clone());
+        }
+        return res;
+      } catch (_) {
+        return (await caches.match(req)) ||
+               (await caches.match('./index.html')) ||
+               new Response('오프라인입니다', { status: 503 });
+      }
+    })());
+    return;
+  }
+
+  // 4) 그 외(아이콘, 글꼴): 캐시 우선, 없으면 받아서 저장
   if (url.origin === location.origin ||
       /fonts\.(googleapis|gstatic)\.com/i.test(url.hostname)) {
     e.respondWith((async () => {
